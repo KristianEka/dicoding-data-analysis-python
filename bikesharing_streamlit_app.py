@@ -13,7 +13,6 @@ def create_monthly_df(df):
     monthly_data = df.groupby("month")["cnt_daily"].sum().reset_index()
     return monthly_data
 
-
 def create_temp_usage(df):
     t_min = -8  # Suhu minimum dalam dataset
     t_max = 39  # Suhu maksimum dalam dataset
