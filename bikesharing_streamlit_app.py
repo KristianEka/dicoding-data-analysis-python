@@ -1,21 +1,24 @@
 # Import Library
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
-from pyarrow import nulls
 
 sns.set_style(style='dark')
+
 
 # Helper Function
 def create_quarterly_df(df):
     quarterly_data = df.groupby("Quarter")["cnt_daily"].sum().reset_index()
     return quarterly_data
 
+
 def create_temp_usage(df):
     temp_usage = df.groupby('temp_hourly')['cnt_hourly'].sum().reset_index()
     most_popular_temp = temp_usage.loc[temp_usage['cnt_hourly'].idxmax()]
     return temp_usage, most_popular_temp
+
 
 def create_rfm_df(df):
     rfm_df = df.groupby('dteday').agg(
@@ -44,6 +47,7 @@ def create_rfm_df(df):
         lambda row: segments.get(tuple(row), 'Others'), axis=1
     )
     return rfm_df
+
 
 # Menyiapkan Data Frame
 main_df = pd.read_csv("main_data.csv")
@@ -79,12 +83,90 @@ rfm_df = create_rfm_df(filter_main_df)
 # Melengkapi dashboard dengan berbagai visualisasi data
 st.header('Bike Sharing Dashboard :bike:')
 
-# Visualisasi Line Chart
-st.subheader('Tren Penyewaan Sepeda per Kuartal')
+# Pertanyaan 1: Bagaimana tren penggunaan sepeda dari tahun 2011 ke 2012?
+st.subheader('Tren Penyewaan Sepeda')
+
 fig, ax = plt.subplots(figsize=(12, 6))
-sns.lineplot(x=quarterly_df["Quarter"].astype(str), y=quarterly_df["cnt_daily"], marker="o", ax=ax)
+sns.lineplot(
+    x=quarterly_df["Quarter"].astype(str),
+    y=quarterly_df["cnt_daily"],
+    marker="o",
+    estimator=sum,
+    ax=ax
+)
 ax.set_title("Total Penyewaan Sepeda per Kuartal", fontsize=16)
 ax.set_xlabel("Kuartal", fontsize=14)
 ax.set_ylabel("Total Penyewaan", fontsize=14)
-plt.xticks(rotation=45)
+plt.xticks(rotation=45, fontsize=14)
 st.pyplot(fig)
+
+## Pertanyaan 2: Bagaimana pola pengunaan sepeda berdasarkan musin (spring, summer, fall, winter)?
+st.subheader('Pola Penggunaan Sepeda')
+
+col1, col2 = st.columns(2)
+
+with col1:
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.barplot(
+        x="season_daily",
+        y="cnt_daily",
+        data=filter_main_df,
+        estimator=np.mean,
+        palette="coolwarm"
+    )
+    ax.set_title("Bike Rentals per Season")
+    ax.set_xlabel("Season")
+    ax.set_ylabel("Average Rentals")
+    st.pyplot(fig)
+
+# Pertanyaan 3: Apakah ada pola khusus dalam penggunaan sepeda berdasarkan hari dalam seminggu (weekday vs weekend)?
+with col2:
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.barplot(
+        x="weekday_hourly",
+        y="cnt_hourly",
+        data=filter_main_df,
+        estimator=np.mean,
+        palette="viridis"
+    )
+    plt.xticks(ticks=[0, 1, 2, 3, 4, 5, 6], labels=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    ax.set_xlabel("Day of the Week")
+    ax.set_ylabel("Average Rentals")
+    ax.set_title("Bike Rentals per Week")
+    st.pyplot(fig)
+
+# Pertanyaan 4: Faktor apa yang paling berpengaruh dalam meningkatkan jumlah pendafataran pengguna (registered users)?
+st.subheader('Faktor yang Mempengaruhi Pendaftaran Pengguna')
+
+fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(25, 10))
+
+sns.heatmap(
+    filter_main_df[["temp_daily", "hum_daily", "windspeed_daily", "registered_daily"]].corr(),
+    annot=True,
+    cmap="coolwarm",
+    ax=ax[0]
+)
+ax[0].set_title("Correlation Heatmap for Registered Users")
+
+sns.lineplot(
+    x='temp_hourly',
+    y='cnt_hourly',
+    data=temp_usage_df,
+    marker='o',
+    color='b'
+)
+plt.axvline(
+    most_popular_temp['temp_hourly'],
+    color='r',
+    linestyle='--',
+    label=f"Peak Usage Temp: {most_popular_temp['temp_hourly']:.2f}"
+)
+ax[1].set_xlabel("Temperature (Normalized)")
+ax[1].set_ylabel("Total Bike Users")
+ax[1].set_title("Temperature vs Bike Usage")
+plt.legend()
+
+st.pyplot(fig)
+
+# Pertanyaan 5: Seberapa besar korelasi antara kelembaban udara dengan jumlah pinjaman sepeda?
+# Pertanyaan 6: Jam berapa penggunaan sepeda paling tinggi?
