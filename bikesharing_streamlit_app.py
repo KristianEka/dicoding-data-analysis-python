@@ -9,14 +9,24 @@ sns.set_style(style='dark')
 
 
 # Helper Function
-def create_quarterly_df(df):
-    quarterly_data = df.groupby("Quarter")["cnt_daily"].sum().reset_index()
-    return quarterly_data
+def create_monthly_df(df):
+    monthly_data = df.groupby("month")["cnt_daily"].sum().reset_index()
+    return monthly_data
 
 
 def create_temp_usage(df):
+    t_min = -8  # Suhu minimum dalam dataset
+    t_max = 39  # Suhu maksimum dalam dataset
+
+    # Mengelompokkan data berdasarkan suhu yang telah dinormalisasi
     temp_usage = df.groupby('temp_hourly')['cnt_hourly'].sum().reset_index()
+
+    # Konversi suhu dari skala normalisasi ke skala asli
+    temp_usage['temp_original'] = temp_usage['temp_hourly'] * (t_max - t_min) + t_min
+
+    # Mencari suhu dengan jumlah penggunaan sepeda tertinggi
     most_popular_temp = temp_usage.loc[temp_usage['cnt_hourly'].idxmax()]
+
     return temp_usage, most_popular_temp
 
 
@@ -60,7 +70,7 @@ main_df["dteday"] = pd.to_datetime(main_df["dteday"])
 # Membuat komponen filter
 min_date = main_df["dteday"].min()
 max_date = main_df["dteday"].max()
-main_df["Quarter"] = main_df["dteday"].dt.to_period("Q")
+main_df["month"] = main_df["dteday"].dt.month
 
 with st.sidebar:
     # Menambahkan logo
@@ -76,7 +86,7 @@ with st.sidebar:
 
 # Data Frame untuk ditampilkan dengan filter range waktu
 filter_main_df = main_df[(main_df["dteday"] >= str(start_date)) & (main_df["dteday"] <= str(end_date))]
-quarterly_df = create_quarterly_df(filter_main_df)
+monthly_df = create_monthly_df(filter_main_df)
 temp_usage_df, most_popular_temp = create_temp_usage(filter_main_df)
 rfm_df = create_rfm_df(filter_main_df)
 
@@ -88,16 +98,20 @@ st.subheader('Tren Penyewaan Sepeda')
 
 fig, ax = plt.subplots(figsize=(12, 6))
 sns.lineplot(
-    x=quarterly_df["Quarter"].astype(str),
-    y=quarterly_df["cnt_daily"],
+    x=monthly_df["month"].astype(str),
+    y=monthly_df["cnt_daily"],
     marker="o",
     estimator=sum,
     ax=ax
 )
-ax.set_title("Total Penyewaan Sepeda per Kuartal", fontsize=16)
-ax.set_xlabel("Kuartal", fontsize=14)
+ax.set_title("Total Penyewaan Sepeda per Bulan", fontsize=16)
+ax.set_xlabel("Bulan", fontsize=14)
 ax.set_ylabel("Total Penyewaan", fontsize=14)
-plt.xticks(rotation=45, fontsize=14)
+plt.xticks(
+    fontsize=14,
+    ticks=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    labels=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+)
 st.pyplot(fig)
 
 ## Pertanyaan 2: Bagaimana pola pengunaan sepeda berdasarkan musin (spring, summer, fall, winter)?
@@ -149,19 +163,23 @@ sns.heatmap(
 ax[0].set_title("Correlation Heatmap for Registered Users")
 
 sns.lineplot(
-    x='temp_hourly',
+    x='temp_original',
     y='cnt_hourly',
     data=temp_usage_df,
     marker='o',
-    color='b'
+    color='b',
+    ax=ax[1]
 )
+
+# Menambahkan garis vertikal untuk suhu dengan penggunaan tertinggi
 plt.axvline(
-    most_popular_temp['temp_hourly'],
+    most_popular_temp['temp_original'],
     color='r',
     linestyle='--',
-    label=f"Peak Usage Temp: {most_popular_temp['temp_hourly']:.2f}"
+    label=f"Peak Usage Temp: {most_popular_temp['temp_original']:.2f}°C"
 )
-ax[1].set_xlabel("Temperature (Normalized)")
+
+ax[1].set_xlabel("Temperature (°C)")
 ax[1].set_ylabel("Total Bike Users")
 ax[1].set_title("Temperature vs Bike Usage")
 plt.legend()
@@ -169,4 +187,59 @@ plt.legend()
 st.pyplot(fig)
 
 # Pertanyaan 5: Seberapa besar korelasi antara kelembaban udara dengan jumlah pinjaman sepeda?
+st.subheader('Korelasi Kelembaban Udara dan Pinjaman Sepeda')
+
+fig, ax = plt.subplots(figsize=(8, 5))
+
+sns.scatterplot(
+    x="hum_daily",
+    y="cnt_daily",
+    data=filter_main_df,
+    alpha=0.5
+)
+ax.set_title("Humidity vs Bike Rentals")
+ax.set_xlabel("Humidity")
+ax.set_ylabel("Total Rentals")
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+st.pyplot(fig)
+
 # Pertanyaan 6: Jam berapa penggunaan sepeda paling tinggi?
+st.subheader('Jam Penggunaan Sepeda Tertinggi')
+
+fig, ax = plt.subplots(figsize=(12, 8))
+sns.lineplot(
+    x="hr",
+    y="cnt_hourly",
+    data=filter_main_df,
+    estimator=np.mean,
+    marker="o",
+    color="b"
+)
+ax.set_title("Bike Rentals per Hour")
+ax.set_xlabel("Hour of the Day")
+ax.set_ylabel("Total Rentals")
+plt.xticks(range(0,24), fontsize=12)
+plt.yticks(fontsize=12)
+plt.grid()
+st.pyplot(fig)
+
+# RFM Analysis
+st.subheader('RFM Analysis')
+fig, ax = plt.subplots(figsize=(12, 8))
+rfm_df['Segment'].value_counts().plot(kind='bar', ax=ax)
+ax.set_title("RFM Segmentation")
+ax.set_xlabel("Segment")
+ax.set_ylabel("Count")
+plt.xticks(rotation=45)
+plt.yticks(fontsize=12)
+st.pyplot(fig)
+# Menampilkan hasil analisis RFM
+rfm_df['Segment'].value_counts()
+st.write(rfm_df[['Recency', 'Frequency', 'Monetary', 'Segment']].head(10))
+# Menampilkan tabel RFM
+st.write("RFM Analysis Table")
+st.dataframe(rfm_df[['Recency', 'Frequency', 'Monetary', 'Segment']].head(10))
+# Menampilkan tabel RFM
+st.write("RFM Analysis Table")
+st.dataframe(rfm_df[['Recency', 'Frequency', 'Monetary', 'Segment']].head(10))
