@@ -250,7 +250,7 @@ plt.grid()
 st.pyplot(fig)
 
 # RFM Analysis
-st.subheader("Best Customer Based on RFM Parameters")
+st.subheader("Best Day Based on RFM Parameters")
 
 col1, col2, col3 = st.columns(3)
 
@@ -309,3 +309,5 @@ ax[2].tick_params(axis='x', labelsize=35)
 ax[2].set_xticklabels(ax[2].get_xticklabels(), rotation=45, ha='right')
 
 st.pyplot(fig)
+
+st.caption('Copyright (c) Kristian Ekachandra 2025')
