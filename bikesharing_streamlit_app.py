@@ -13,6 +13,7 @@ def create_monthly_df(df):
     monthly_data = df.groupby("month")["cnt_daily"].sum().reset_index()
     return monthly_data
 
+
 def create_temp_usage(df):
     t_min = -8  # Suhu minimum dalam dataset
     t_max = 39  # Suhu maksimum dalam dataset
@@ -24,25 +25,26 @@ def create_temp_usage(df):
     temp_usage['temp_original'] = temp_usage['temp_hourly'] * (t_max - t_min) + t_min
 
     # Mencari suhu dengan jumlah penggunaan sepeda tertinggi
-    most_popular_temp = temp_usage.loc[temp_usage['cnt_hourly'].idxmax()]
+    popular_temp = temp_usage.loc[temp_usage['cnt_hourly'].idxmax()]
 
-    return temp_usage, most_popular_temp
+    return temp_usage, popular_temp
 
 
 def create_rfm_df(df):
-    rfm_df = df.groupby('dteday').agg(
+    _rfm_df = df.groupby('dteday').agg(
         Recency=('dteday', lambda x: (df['dteday'].max() - x.max()).days),
         Frequency=('dteday', 'count'),
         Monetary=('cnt_daily', 'sum')
     )
 
-    rfm_df['R_Score'] = pd.qcut(rfm_df['Recency'], q=4, labels=[4, 3, 2, 1])
-    rfm_df['F_Score'] = pd.cut(rfm_df['Frequency'], bins=4, labels=[1, 2, 3, 4], duplicates='drop')
-    rfm_df['M_Score'] = pd.qcut(rfm_df['Monetary'], q=4, labels=[1, 2, 3, 4])
+    _rfm_df['R_Score'] = pd.qcut(_rfm_df['Recency'], q=4, labels=[4, 3, 2, 1])
+    _rfm_df['F_Score'] = pd.cut(_rfm_df['Frequency'], bins=4, labels=[1, 2, 3, 4], duplicates='drop')
+    _rfm_df['M_Score'] = pd.qcut(_rfm_df['Monetary'], q=4, labels=[1, 2, 3, 4])
 
-    rfm_df['rfm_Segment'] = rfm_df['R_Score'].astype(str) + rfm_df['F_Score'].astype(str) + rfm_df['M_Score'].astype(
+    _rfm_df['rfm_Segment'] = _rfm_df['R_Score'].astype(str) + _rfm_df['F_Score'].astype(str) + _rfm_df[
+        'M_Score'].astype(
         str)
-    rfm_df['rfm_Score'] = rfm_df[['R_Score', 'F_Score', 'M_Score']].sum(axis=1)
+    _rfm_df['rfm_Score'] = _rfm_df[['R_Score', 'F_Score', 'M_Score']].sum(axis=1)
 
     segments = {
         (4, 4, 4): 'Peak Days',
@@ -52,10 +54,10 @@ def create_rfm_df(df):
         (1, 3, 3): 'Declining Usage',
         (1, 1, 1): 'Low Usage Days'
     }
-    rfm_df['Segment'] = rfm_df[['R_Score', 'F_Score', 'M_Score']].apply(
+    _rfm_df['Segment'] = _rfm_df[['R_Score', 'F_Score', 'M_Score']].apply(
         lambda row: segments.get(tuple(row), 'Others'), axis=1
     )
-    return rfm_df
+    return _rfm_df
 
 
 # Menyiapkan Data Frame
@@ -75,9 +77,11 @@ with st.sidebar:
     # Menambahkan logo
     st.image("https://bikeshare.metro.net/wp-content/uploads/2016/04/cropped-metro-bike-share-favicon.png")
 
+    st.title('Bike Sharing Data Analysis')
+
     # Mengambil start_date dan end_date dari date_input
     start_date, end_date = st.date_input(
-        label='Rentang Waktu',
+        label='Time Span',
         min_value=min_date,
         max_value=max_date,
         value=[min_date, max_date]
@@ -93,7 +97,17 @@ rfm_df = create_rfm_df(filter_main_df)
 st.header('Bike Sharing Dashboard :bike:')
 
 # Pertanyaan 1: Bagaimana tren penggunaan sepeda dari tahun 2011 ke 2012?
-st.subheader('Tren Penyewaan Sepeda')
+st.subheader('Bike Rental Trend')
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Total Rentals", value=filter_main_df["cnt_daily"].sum())
+
+with col2:
+    st.metric("Total Rentals (Registered Users)", value=filter_main_df["registered_daily"].sum())
+
+with col3:
+    st.metric("Total Rentals (Casual Users)", value=filter_main_df["casual_daily"].sum())
 
 fig, ax = plt.subplots(figsize=(12, 6))
 sns.lineplot(
@@ -103,9 +117,9 @@ sns.lineplot(
     estimator=sum,
     ax=ax
 )
-ax.set_title("Total Penyewaan Sepeda per Bulan", fontsize=16)
-ax.set_xlabel("Bulan", fontsize=14)
-ax.set_ylabel("Total Penyewaan", fontsize=14)
+ax.set_title("Total Bike Rentals per Month", fontsize=16)
+ax.set_xlabel("Month", fontsize=14)
+ax.set_ylabel("Total Rentals", fontsize=14)
 plt.xticks(
     fontsize=14,
     ticks=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
@@ -114,10 +128,9 @@ plt.xticks(
 st.pyplot(fig)
 
 ## Pertanyaan 2: Bagaimana pola pengunaan sepeda berdasarkan musin (spring, summer, fall, winter)?
-st.subheader('Pola Penggunaan Sepeda')
+st.subheader('Bike Rentals Pattern by Season and Week')
 
 col1, col2 = st.columns(2)
-
 with col1:
     fig, ax = plt.subplots(figsize=(12, 8))
     sns.barplot(
@@ -149,10 +162,9 @@ with col2:
     st.pyplot(fig)
 
 # Pertanyaan 4: Faktor apa yang paling berpengaruh dalam meningkatkan jumlah pendafataran pengguna (registered users)?
-st.subheader('Faktor yang Mempengaruhi Pendaftaran Pengguna')
+st.subheader('Factors Influencing Registered Users')
 
 fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(25, 10))
-
 sns.heatmap(
     filter_main_df[["temp_daily", "hum_daily", "windspeed_daily", "registered_daily"]].corr(),
     annot=True,
@@ -177,7 +189,6 @@ plt.axvline(
     linestyle='--',
     label=f"Peak Usage Temp: {most_popular_temp['temp_original']:.2f}°C"
 )
-
 ax[1].set_xlabel("Temperature (°C)")
 ax[1].set_ylabel("Total Bike Users")
 ax[1].set_title("Temperature vs Bike Usage")
@@ -186,10 +197,9 @@ plt.legend()
 st.pyplot(fig)
 
 # Pertanyaan 5: Seberapa besar korelasi antara kelembaban udara dengan jumlah pinjaman sepeda?
-st.subheader('Korelasi Kelembaban Udara dan Pinjaman Sepeda')
+st.subheader('Correlation between Humidity and Bike Rentals')
 
 fig, ax = plt.subplots(figsize=(8, 5))
-
 sns.scatterplot(
     x="hum_daily",
     y="cnt_daily",
@@ -204,7 +214,23 @@ plt.yticks(fontsize=12)
 st.pyplot(fig)
 
 # Pertanyaan 6: Jam berapa penggunaan sepeda paling tinggi?
-st.subheader('Jam Penggunaan Sepeda Tertinggi')
+st.subheader('Bike Rentals by Hour of the Day')
+
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("Peak Hour", value=filter_main_df["hr"].mode()[0])
+
+with col2:
+    st.metric("Total Rentals at Peak Hour",
+              value=filter_main_df[filter_main_df["hr"] == filter_main_df["hr"].mode()[0]]["cnt_hourly"].sum())
+
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("Lowest Hour", value=filter_main_df["hr"].min())
+
+with col2:
+    st.metric("Total Rentals at Lowest Hour",
+              value=filter_main_df[filter_main_df["hr"] == filter_main_df["hr"].min()]["cnt_hourly"].sum())
 
 fig, ax = plt.subplots(figsize=(12, 8))
 sns.lineplot(
@@ -218,27 +244,68 @@ sns.lineplot(
 ax.set_title("Bike Rentals per Hour")
 ax.set_xlabel("Hour of the Day")
 ax.set_ylabel("Total Rentals")
-plt.xticks(range(0,24), fontsize=12)
+plt.xticks(range(0, 24), fontsize=12)
 plt.yticks(fontsize=12)
 plt.grid()
 st.pyplot(fig)
 
 # RFM Analysis
-st.subheader('RFM Analysis')
-fig, ax = plt.subplots(figsize=(12, 8))
-rfm_df['Segment'].value_counts().plot(kind='bar', ax=ax)
-ax.set_title("RFM Segmentation")
-ax.set_xlabel("Segment")
-ax.set_ylabel("Count")
-plt.xticks(rotation=45)
-plt.yticks(fontsize=12)
+st.subheader("Best Customer Based on RFM Parameters")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    avg_recency = round(rfm_df["Recency"].mean(), 2)
+    st.metric("Average Rencency", value=avg_recency)
+
+with col2:
+    avg_frequency = round(rfm_df["Frequency"].mean(), 2)
+    st.metric("Average Frequency", value=avg_frequency)
+
+with col3:
+    avg_monetary = round(rfm_df["Monetary"].mean(), 2)
+    st.metric("Average Monetary", value=avg_monetary)
+
+fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(35, 15))
+colors = ["#90CAF9", "#90CAF9", "#90CAF9", "#90CAF9", "#90CAF9"]
+sns.barplot(
+    y="Recency",
+    x="dteday",
+    data=rfm_df.sort_values(by="Recency", ascending=True).head(5),
+    palette=colors,
+    ax=ax[0]
+)
+ax[0].set_ylabel(None)
+ax[0].set_xlabel("dteday", fontsize=30)
+ax[0].set_title("By Recency (days)", loc="center", fontsize=50)
+ax[0].tick_params(axis='y', labelsize=30)
+ax[0].tick_params(axis='x', labelsize=35)
+ax[0].set_xticklabels(ax[0].get_xticklabels(), rotation=45, ha='right')
+sns.barplot(
+    y="Frequency",
+    x="dteday",
+    data=rfm_df.sort_values(by="Frequency", ascending=False).head(5),
+    palette=colors,
+    ax=ax[1]
+)
+ax[1].set_ylabel(None)
+ax[1].set_xlabel("dteday", fontsize=30)
+ax[1].set_title("By Frequency", loc="center", fontsize=50)
+ax[1].tick_params(axis='y', labelsize=30)
+ax[1].tick_params(axis='x', labelsize=35)
+ax[1].set_xticklabels(ax[1].get_xticklabels(), rotation=45, ha='right')
+sns.barplot(
+    y="Monetary",
+    x="dteday",
+    data=rfm_df.sort_values(by="Monetary", ascending=False).head(5),
+    palette=colors,
+    ax=ax[2]
+)
+ax[2].set_ylabel(None)
+ax[2].set_xlabel("dteday", fontsize=30)
+ax[2].set_title("By Monetary", loc="center", fontsize=50)
+ax[2].tick_params(axis='y', labelsize=30)
+ax[2].tick_params(axis='x', labelsize=35)
+ax[2].set_xticklabels(ax[2].get_xticklabels(), rotation=45, ha='right')
+
 st.pyplot(fig)
-# Menampilkan hasil analisis RFM
-rfm_df['Segment'].value_counts()
-st.write(rfm_df[['Recency', 'Frequency', 'Monetary', 'Segment']].head(10))
-# Menampilkan tabel RFM
-st.write("RFM Analysis Table")
-st.dataframe(rfm_df[['Recency', 'Frequency', 'Monetary', 'Segment']].head(10))
-# Menampilkan tabel RFM
-st.write("RFM Analysis Table")
-st.dataframe(rfm_df[['Recency', 'Frequency', 'Monetary', 'Segment']].head(10))
